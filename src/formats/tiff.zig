@@ -154,12 +154,24 @@ pub const TIFF = struct {
         };
     }
 
-    pub fn uncompressLZW(_: *TIFF, allocator: std.mem.Allocator, read_stream: *io.ReadStream, dest_buffer: []u8) !void {
+    pub fn uncompressLZW(_: *TIFF, allocator: std.mem.Allocator, read_stream: *io.ReadStream, dest_buffer: []u8, compressed_length: u32) !void {
+        // Read compressed data into a temporary buffer first.
+        // This ensures we don't read beyond the strip boundary, which can happen
+        // when the LZW stream doesn't end exactly at the expected position.
+        const compressed_buffer = try allocator.alloc(u8, compressed_length);
+        defer allocator.free(compressed_buffer);
+
+        const reader = read_stream.reader();
+        _ = try reader.readSliceAll(compressed_buffer);
+
+        // Create a fixed buffer reader for the compressed data
+        var compressed_stream = io.ReadStream.initMemory(compressed_buffer);
+
         var writer = std.Io.Writer.fixed(dest_buffer);
         var lzw_decoder = try lzw.Decoder(.big).init(allocator, 8, 1);
         defer lzw_decoder.deinit();
 
-        lzw_decoder.decode(read_stream.reader(), &writer) catch {
+        lzw_decoder.decode(compressed_stream.reader(), &writer) catch {
             return Image.ReadError.InvalidData;
         };
     }
@@ -224,7 +236,7 @@ pub const TIFF = struct {
                 .uncompressed => _ = try reader.readSliceShort(strip_buffer[0..]),
                 .packbits => _ = try packbits.decode(read_stream, strip_buffer, compressed_byte_count),
                 .ccitt_rle => _ = try self.uncompressCCITT(read_stream, strip_buffer, image_width, current_row_size),
-                .lzw => _ = try self.uncompressLZW(allocator, read_stream, strip_buffer),
+                .lzw => _ = try self.uncompressLZW(allocator, read_stream, strip_buffer, compressed_byte_count),
                 .deflate, .pixar_deflate => _ = try self.uncompressDeflate(read_stream, strip_buffer),
                 else => return Image.Error.Unsupported,
             }

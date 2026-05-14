@@ -38,5 +38,5 @@ test {
         @import("tests/octree_quantizer_test.zig"),
         @import("tests/pixel_format_converter_test.zig"),
         @import("tests/pixel_format_test.zig"),
-    }) |source_file| std.testing.refAllDeclsRecursive(source_file);
+    }) |source_file| std.testing.refAllDecls(source_file);
 }

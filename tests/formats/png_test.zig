@@ -8,10 +8,10 @@ const valid_header_data = png.magic_header ++ "\x00\x00\x00\x0d" ++ png.Chunks.I
 
 test "png: Should error on non PNG images" {
     const file = try helpers.testOpenFile(helpers.fixtures_path ++ "bmp/simple_v4.bmp");
-    defer file.close();
+    defer file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
 
     const invalidFile = png.PNG.readImage(helpers.zigimg_test_allocator, &read_stream);
 
@@ -111,10 +111,10 @@ test "png: Indexed PNG with transparency (Aseprite output)" {
     // mlarouche: While the full test suite already test this image, I like having a smaller test that I can verify
     // some specific info myself
     const file = try helpers.testOpenFile(helpers.fixtures_path ++ "png/aseprite_indexed_transparent.png");
-    defer file.close();
+    defer file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
 
     var png_image = try png.PNG.readImage(helpers.zigimg_test_allocator, &read_stream);
     defer png_image.deinit(helpers.zigimg_test_allocator);
@@ -180,18 +180,18 @@ test "png: Don't write tRNS chunk in indexed format when there is no alpha" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_indexed_no_trns.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], zigimg.Image.EncoderOptions{
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], zigimg.Image.EncoderOptions{
         .png = .{},
     });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var check_trns_processor: CheckTrnsPresentProcessor = .{};
 
@@ -220,18 +220,18 @@ test "png: Write tRNS chunk in indexed format only when alpha is present" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_indexed_trns.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], zigimg.Image.EncoderOptions{
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], zigimg.Image.EncoderOptions{
         .png = .{},
     });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var check_trns_processor: CheckTrnsPresentProcessor = .{};
 
@@ -268,16 +268,16 @@ test "png: Write indexed1 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_indexed1.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -322,16 +322,16 @@ test "png: Write indexed2 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_indexed2.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -376,16 +376,16 @@ test "png: Write indexed4 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_indexed4.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -430,16 +430,16 @@ test "png: Write indexed8 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_indexed8.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -475,16 +475,16 @@ test "png: Write grayscale1 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_grayscale1.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -513,16 +513,16 @@ test "png: Write grayscale2 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_grayscale2.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -551,16 +551,16 @@ test "png: Write grayscale4 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_grayscale4.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -589,16 +589,16 @@ test "png: Write grayscale8 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_grayscale8.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -628,16 +628,16 @@ test "png: Write grayscale8Alpha format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_grayscale8Alpha.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -667,16 +667,16 @@ test "png: Write grayscale16 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_grayscale16.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -706,16 +706,16 @@ test "png: Write grayscale16Alpha format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_grayscale16Alpha.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -747,16 +747,16 @@ test "png: Write rgb24 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_rgb24.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -790,16 +790,16 @@ test "png: Write rgba32 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_rgba32.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -833,16 +833,16 @@ test "png: Write rgb48 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_rgb48.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -876,16 +876,16 @@ test "png: Write rgba64 format" {
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     const image_file_name = "zigimg_png_rgba64.png";
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .png = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .png = .{} });
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var options = png.DefaultOptions.init(.{});
 
@@ -910,14 +910,14 @@ test "png: Official Test Suite" {
 
 // Useful to quickly test everything on full dir of images
 pub fn testWithDir(directory: []const u8, test_md5_signature: bool) !void {
-    var test_dir_opt = std.fs.cwd().openDir(directory, .{ .access_sub_paths = false, .no_follow = true, .iterate = true }) catch null;
+    var test_dir_opt = std.Io.Dir.cwd().openDir(std.testing.io, directory, .{ .access_sub_paths = false, .iterate = true }) catch null;
     if (test_dir_opt) |*test_dir| {
-        defer test_dir.close();
+        defer test_dir.close(std.testing.io);
         var it = test_dir.iterate();
         if (test_md5_signature) {
             std.debug.print("\n", .{});
         }
-        while (try it.next()) |entry| {
+        while (try it.next(std.testing.io)) |entry| {
             if (entry.kind != .file or !std.mem.eql(u8, std.fs.path.extension(entry.name), ".png")) {
                 continue;
             }
@@ -926,11 +926,11 @@ pub fn testWithDir(directory: []const u8, test_md5_signature: bool) !void {
                 std.debug.print("Testing file {s} ... ", .{entry.name});
             }
 
-            var test_file = try test_dir.openFile(entry.name, .{ .mode = .read_only });
-            defer test_file.close();
+            var test_file = try test_dir.openFile(std.testing.io, entry.name, .{ .mode = .read_only });
+            defer test_file.close(std.testing.io);
 
             var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-            var read_stream = zigimg.io.ReadStream.initFile(test_file, read_buffer[0..]);
+            var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, test_file, read_buffer[0..]);
 
             if (entry.name[0] == 'x' and entry.name[2] != 't' and entry.name[2] != 's') {
                 try std.testing.expectError(zigimg.Image.ReadError.InvalidData, png.loadHeader(&read_stream));
@@ -968,11 +968,11 @@ pub fn testWithDir(directory: []const u8, test_md5_signature: bool) !void {
             @memcpy(test_data_name[len - 3 .. len], "tsd");
 
             // Read test data and check with it
-            if (test_dir.openFile(test_data_name[0..len], .{ .mode = .read_only })) |test_data_file| {
-                defer test_data_file.close();
+            if (test_dir.openFile(std.testing.io, test_data_name[0..len], .{ .mode = .read_only })) |test_data_file| {
+                defer test_data_file.close(std.testing.io);
 
                 var test_read_buffer: [512]u8 = undefined;
-                var test_file_reader = test_data_file.reader(test_read_buffer[0..]);
+                var test_file_reader = test_data_file.reader(std.testing.io, test_read_buffer[0..]);
                 var test_reader = &test_file_reader.interface;
 
                 var expected_md5: [16]u8 = undefined;
@@ -1002,12 +1002,12 @@ pub fn testWithDir(directory: []const u8, test_md5_signature: bool) !void {
     }
 }
 
-fn writeTestData(dir: *std.fs.Dir, test_data_name: []const u8, result: *zigimg.color.PixelStorage, md5_value: []const u8) !void {
-    var test_output = try dir.createFile(test_data_name, .{});
-    defer test_output.close();
+fn writeTestData(dir: *std.Io.Dir, test_data_name: []const u8, result: *zigimg.color.PixelStorage, md5_value: []const u8) !void {
+    var test_output = try dir.createFile(std.testing.io, test_data_name, .{});
+    defer test_output.close(std.testing.io);
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var file_writer = test_output.writer(write_buffer[0..]);
+    var file_writer = test_output.writer(std.testing.io, write_buffer[0..]);
     var writer = &file_writer.interface;
 
     try writer.print("{s}\n{X}", .{ @tagName(result.*), md5_value });
@@ -1018,14 +1018,14 @@ fn writeTestData(dir: *std.fs.Dir, test_data_name: []const u8, result: *zigimg.c
 test "png: InfoProcessor on Png Test suite" {
     const directory = helpers.fixtures_path ++ "png/";
 
-    var test_dir_opt = std.fs.cwd().openDir(directory, .{ .access_sub_paths = false, .no_follow = true, .iterate = true }) catch null;
+    var test_dir_opt = std.Io.Dir.cwd().openDir(std.testing.io, directory, .{ .access_sub_paths = false, .iterate = true }) catch null;
     if (test_dir_opt) |*test_dir| {
-        defer test_dir.close();
+        defer test_dir.close(std.testing.io);
         var it = test_dir.iterate();
 
         var info_buffer: [16384]u8 = undefined;
 
-        while (try it.next()) |entry| {
+        while (try it.next(std.testing.io)) |entry| {
             if (entry.kind != .file or !std.mem.eql(u8, std.fs.path.extension(entry.name), ".png")) {
                 continue;
             }
@@ -1033,11 +1033,11 @@ test "png: InfoProcessor on Png Test suite" {
             var info_stream = zigimg.io.WriteStream.initMemory(info_buffer[0..]);
             var options = png.InfoProcessor.PngInfoOptions.init(png.InfoProcessor.init(info_stream.writer()));
 
-            var test_file = try test_dir.openFile(entry.name, .{ .mode = .read_only });
-            defer test_file.close();
+            var test_file = try test_dir.openFile(std.testing.io, entry.name, .{ .mode = .read_only });
+            defer test_file.close(std.testing.io);
 
             var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-            var read_stream = zigimg.io.ReadStream.initFile(test_file, read_buffer[0..]);
+            var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, test_file, read_buffer[0..]);
             if (entry.name[0] == 'x') {
                 continue;
             }
@@ -1051,13 +1051,13 @@ test "png: InfoProcessor on Png Test suite" {
             @memcpy(test_data_name[len - 4 .. len], "info");
 
             // Read test data and check with it
-            if (test_dir.openFile(test_data_name[0..len], .{ .mode = .read_only })) |test_data_file| {
-                defer test_data_file.close();
+            if (test_dir.openFile(std.testing.io, test_data_name[0..len], .{ .mode = .read_only })) |test_data_file| {
+                defer test_data_file.close(std.testing.io);
 
                 var expected_data_buffer: [16384]u8 = undefined;
 
                 var test_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-                var file_reader = test_data_file.reader(test_read_buffer[0..]);
+                var file_reader = test_data_file.reader(std.testing.io, test_read_buffer[0..]);
                 var reader = &file_reader.interface;
 
                 const loaded = try reader.readSliceShort(expected_data_buffer[0..]);
@@ -1065,11 +1065,11 @@ test "png: InfoProcessor on Png Test suite" {
                 try std.testing.expectEqualSlices(u8, expected_data_buffer[0..loaded], info_buffer[0..loaded]);
             } else |_| {
                 // If there is no test data assume test is correct and write it out
-                var test_output_file = try test_dir.createFile(test_data_name[0..len], .{});
-                defer test_output_file.close();
+                var test_output_file = try test_dir.createFile(std.testing.io, test_data_name[0..len], .{});
+                defer test_output_file.close(std.testing.io);
 
                 var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-                var file_writer = test_output_file.writer(write_buffer[0..]);
+                var file_writer = test_output_file.writer(std.testing.io, write_buffer[0..]);
                 var writer = &file_writer.interface;
 
                 try writer.writeAll(info_buffer[0..@intCast(info_stream.getPos())]);

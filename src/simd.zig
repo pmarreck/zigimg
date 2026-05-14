@@ -78,8 +78,10 @@ pub fn vpermd(v: @Vector(8, i32), mask: @Vector(8, i32)) @Vector(8, i32) {
               [v] "x" (v),
         );
     } else {
+        // 0.16: runtime indexing on @Vector is forbidden; coerce to array first.
+        const v_arr: [8]i32 = v;
         var res: @Vector(8, i32) = undefined;
-        inline for (0..8) |i| res[i] = v[@as(u32, @bitCast(mask[i]))];
+        inline for (0..8) |i| res[i] = v_arr[@as(u32, @bitCast(mask[i]))];
         return res;
     }
 }

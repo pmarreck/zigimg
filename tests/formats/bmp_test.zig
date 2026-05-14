@@ -87,12 +87,12 @@ fn verifyBitmapRGBAV5(the_bitmap: bmp.BMP, pixels: zigimg.color.PixelStorage) !v
 
 test "Read simple version 4 24-bit RGB bitmap" {
     const file = try helpers.testOpenFile(helpers.fixtures_path ++ "bmp/simple_v4.bmp");
-    defer file.close();
+    defer file.close(std.testing.io);
 
     var the_bitmap = bmp.BMP{};
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
 
     const pixels = try the_bitmap.read(helpers.zigimg_test_allocator, &read_stream);
     defer pixels.deinit(helpers.zigimg_test_allocator);
@@ -145,10 +145,10 @@ test "Read simple version 4 24-bit RGB bitmap" {
 
 test "Read a valid version 5 RGBA bitmap from file" {
     const file = try helpers.testOpenFile(helpers.fixtures_path ++ "bmp/windows_rgba_v5.bmp");
-    defer file.close();
+    defer file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
 
     var the_bitmap = bmp.BMP{};
 
@@ -174,10 +174,10 @@ test "Read a valid version 5 RGBA bitmap from memory" {
 
 test "Should error when reading an invalid file" {
     const file = try helpers.testOpenFile(helpers.fixtures_path ++ "bmp/notbmp.png");
-    defer file.close();
+    defer file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
 
     var the_bitmap = bmp.BMP{};
 
@@ -215,17 +215,17 @@ test "Write a v4 bitmap when writing an image with bgr24 pixel format" {
     pixels.bgr24[7] = zigimg.color.Bgr24.from.rgb(255, 255, 0);
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .bmp = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .bmp = .{} });
 
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var read_bmp = bmp.BMP{};
 
@@ -277,17 +277,17 @@ test "Write a v5 bitmap when writing an image with bgra32 pixel format" {
     pixels.bgra32[8] = zigimg.color.Bgra32.from.rgba(0, 0, 0, 0);
 
     var write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    try source_image.writeToFilePath(helpers.zigimg_test_allocator, image_file_name, write_buffer[0..], .{ .bmp = .{} });
+    try source_image.writeToFilePath(helpers.zigimg_test_allocator, std.testing.io, image_file_name, write_buffer[0..], .{ .bmp = .{} });
 
     defer {
-        std.fs.cwd().deleteFile(image_file_name) catch {};
+        std.Io.Dir.cwd().deleteFile(std.testing.io, image_file_name) catch {};
     }
 
     const read_file = try helpers.testOpenFile(image_file_name);
-    defer read_file.close();
+    defer read_file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(read_file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, read_file, read_buffer[0..]);
 
     var read_bmp = bmp.BMP{};
 

@@ -8,10 +8,10 @@ const zero_qoi_file = helpers.fixtures_path ++ "qoi/zero.qoi";
 
 test "Should error on non QOI images" {
     const file = try helpers.testOpenFile(helpers.fixtures_path ++ "bmp/simple_v4.bmp");
-    defer file.close();
+    defer file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
 
     var qoi_file = qoi.QOI{};
 
@@ -22,10 +22,10 @@ test "Should error on non QOI images" {
 
 test "Read zero.qoi file" {
     const file = try helpers.testOpenFile(zero_qoi_file);
-    defer file.close();
+    defer file.close(std.testing.io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
 
     var qoi_file = qoi.QOI{};
 

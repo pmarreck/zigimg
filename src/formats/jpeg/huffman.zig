@@ -7,7 +7,8 @@ const Image = @import("../../Image.zig");
 const io = @import("../../io.zig");
 
 const HuffmanCode = struct { length_minus_one: u4, code: u16 };
-const HuffmanCodeMap = std.AutoArrayHashMap(HuffmanCode, u8);
+// 0.16: managed AutoArrayHashMap is gone; use Unmanaged and pass the allocator on calls.
+const HuffmanCodeMap = std.AutoArrayHashMapUnmanaged(HuffmanCode, u8);
 
 const JPEG_DEBUG = false;
 const JPEG_VERY_DEBUG = false;
@@ -38,8 +39,8 @@ pub const Table = struct {
         var total_huffman_codes: usize = 0;
         for (code_counts) |count| total_huffman_codes += count;
 
-        var huffman_code_map = HuffmanCodeMap.init(allocator);
-        errdefer huffman_code_map.deinit();
+        var huffman_code_map: HuffmanCodeMap = .empty;
+        errdefer huffman_code_map.deinit(allocator);
 
         var fast_table: [1 << fast_bits]u8 = @splat(255);
         var fast_size: [1 << fast_bits]u5 = @splat(0);
@@ -65,7 +66,7 @@ pub const Table = struct {
                 }
 
                 const byte = try reader.takeByte();
-                try huffman_code_map.put(.{ .length_minus_one = @as(u4, @intCast(i)), .code = code }, byte);
+                try huffman_code_map.put(allocator, .{ .length_minus_one = @as(u4, @intCast(i)), .code = code }, byte);
 
                 // construct accelaration structure see stb_image
                 if (i + 1 <= fast_bits) {
@@ -96,7 +97,7 @@ pub const Table = struct {
     }
 
     pub fn deinit(self: *Table) void {
-        self.code_map.deinit();
+        self.code_map.deinit(self.allocator);
     }
 };
 

@@ -15,7 +15,20 @@ pub fn Matrix(comptime T: type) type {
 
         const ComponentSize = @typeInfo(T).array.len;
         const VectorType = @Vector(ComponentSize, f32);
+        const ArrayType = [ComponentSize]f32;
         const Self = @This();
+
+        // 0.16: runtime indexing into @Vector is not allowed — coerce to array first.
+        inline fn vget(v: VectorType, idx: usize) f32 {
+            const arr: ArrayType = v;
+            return arr[idx];
+        }
+
+        inline fn vset(v: *VectorType, idx: usize, value: f32) void {
+            var arr: ArrayType = v.*;
+            arr[idx] = value;
+            v.* = arr;
+        }
 
         pub fn determinant(self: Self) f32 {
             if (ComponentSize == 2) {
@@ -26,10 +39,11 @@ pub fn Matrix(comptime T: type) type {
                 // To find the determinant, use a Gaussian elimination to transform the temp matrix into the row echelon form
                 for (0..(ComponentSize - 1)) |row| {
                     for ((row + 1)..ComponentSize) |next_row| {
-                        const factor = temp.matrix[next_row][row] / temp.matrix[row][row];
+                        const factor = vget(temp.matrix[next_row], row) / vget(temp.matrix[row], row);
 
                         for (0..ComponentSize) |column| {
-                            temp.matrix[next_row][column] = temp.matrix[next_row][column] - factor * temp.matrix[row][column];
+                            const new_val = vget(temp.matrix[next_row], column) - factor * vget(temp.matrix[row], column);
+                            vset(&temp.matrix[next_row], column, new_val);
                         }
                     }
                 }
@@ -38,7 +52,7 @@ pub fn Matrix(comptime T: type) type {
                 var result: f32 = temp.matrix[0][0];
 
                 for (1..ComponentSize) |diagonal| {
-                    result *= temp.matrix[diagonal][diagonal];
+                    result *= vget(temp.matrix[diagonal], diagonal);
                 }
 
                 return result;
@@ -51,7 +65,7 @@ pub fn Matrix(comptime T: type) type {
             for (0..ComponentSize) |row| {
                 const stride = row * ComponentSize;
                 for (0..ComponentSize) |column| {
-                    result.matrix[row][column] = array[stride + column];
+                    vset(&result.matrix[row], column, array[stride + column]);
                 }
             }
 
@@ -74,20 +88,22 @@ pub fn Matrix(comptime T: type) type {
 
             for (0..ComponentSize) |row| {
                 // Transform the pivot to 1 by multiplying the row by its inverse
-                const inverse_pivot = 1.0 / temp.matrix[row][row];
+                const inverse_pivot = 1.0 / vget(temp.matrix[row], row);
 
                 for (0..ComponentSize) |column| {
-                    temp.matrix[row][column] *= inverse_pivot;
-                    result.matrix[row][column] *= inverse_pivot;
+                    vset(&temp.matrix[row], column, vget(temp.matrix[row], column) * inverse_pivot);
+                    vset(&result.matrix[row], column, vget(result.matrix[row], column) * inverse_pivot);
                 }
 
                 // Then do Gaussian elimination from current row to bottom
                 for ((row + 1)..ComponentSize) |next_row| {
-                    const factor = temp.matrix[next_row][row] / temp.matrix[row][row];
+                    const factor = vget(temp.matrix[next_row], row) / vget(temp.matrix[row], row);
 
                     for (0..ComponentSize) |column| {
-                        temp.matrix[next_row][column] = temp.matrix[next_row][column] - factor * temp.matrix[row][column];
-                        result.matrix[next_row][column] = result.matrix[next_row][column] - factor * result.matrix[row][column];
+                        const new_temp = vget(temp.matrix[next_row], column) - factor * vget(temp.matrix[row], column);
+                        vset(&temp.matrix[next_row], column, new_temp);
+                        const new_result = vget(result.matrix[next_row], column) - factor * vget(result.matrix[row], column);
+                        vset(&result.matrix[next_row], column, new_result);
                     }
                 }
             }
@@ -99,11 +115,13 @@ pub fn Matrix(comptime T: type) type {
                 var previous_row = row -% 1;
 
                 while (previous_row >= 0 and previous_row < ComponentSize) : (previous_row -%= 1) {
-                    const factor = temp.matrix[previous_row][row] / temp.matrix[row][row];
+                    const factor = vget(temp.matrix[previous_row], row) / vget(temp.matrix[row], row);
 
                     for (0..ComponentSize) |column| {
-                        temp.matrix[previous_row][column] = temp.matrix[previous_row][column] - factor * temp.matrix[row][column];
-                        result.matrix[previous_row][column] = result.matrix[previous_row][column] - factor * result.matrix[row][column];
+                        const new_temp = vget(temp.matrix[previous_row], column) - factor * vget(temp.matrix[row], column);
+                        vset(&temp.matrix[previous_row], column, new_temp);
+                        const new_result = vget(result.matrix[previous_row], column) - factor * vget(result.matrix[row], column);
+                        vset(&result.matrix[previous_row], column, new_result);
                     }
                 }
             }
@@ -128,7 +146,7 @@ pub fn Matrix(comptime T: type) type {
 
             for (0..ComponentSize) |row| {
                 for (0..ComponentSize) |column| {
-                    result.matrix[row][column] = @reduce(.Add, self.matrix[row] * transposed_right.matrix[column]);
+                    vset(&result.matrix[row], column, @reduce(.Add, self.matrix[row] * transposed_right.matrix[column]));
                 }
             }
 
@@ -140,7 +158,7 @@ pub fn Matrix(comptime T: type) type {
 
             for (0..ComponentSize) |row| {
                 for (0..ComponentSize) |column| {
-                    result.matrix[row][column] = self.matrix[column][row];
+                    vset(&result.matrix[row], column, vget(self.matrix[column], row));
                 }
             }
 

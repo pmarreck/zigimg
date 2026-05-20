@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            system: x86_64-linux
+            name: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            system: aarch64-linux
+            name: linux-aarch64
+          - runner: macos-14
+            system: aarch64-darwin
+            name: macos-aarch64
+
+    runs-on: ${{ matrix.runner }}
+    name: ${{ matrix.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+        timeout-minutes: 5
+        continue-on-error: true
+
+      - name: Build
+        run: nix build .#packages.${{ matrix.system }}.default
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zigimg-${{ matrix.name }}
+          path: result/

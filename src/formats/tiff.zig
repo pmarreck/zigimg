@@ -1,4 +1,5 @@
 const ccitt = @import("../compressions/ccitt.zig");
+const ccitt_t6 = @import("../compressions/ccitt_t6.zig");
 const color = @import("../color.zig");
 const FormatInterface = @import("../FormatInterface.zig");
 const Image = @import("../Image.zig");
@@ -140,6 +141,63 @@ pub const TIFF = struct {
                 },
             }
         }
+
+        // TIFF 6.0 leniency: some encoders write a single BitsPerSample value
+        // and rely on the decoder to replicate it across all SamplesPerPixel
+        // channels (we have seen this in scanner output where the IFD says
+        // SamplesPerPixel=3 but BitsPerSample is just one SHORT=8). libtiff
+        // handles this the same way.
+        if (bitmap.samples_per_pixel > 1 and bitmap.bits_per_sample.data.len == 1) {
+            const bps_value = bitmap.bits_per_sample.data[0];
+            bitmap.bits_per_sample.resize(bitmap.samples_per_pixel);
+            for (0..bitmap.samples_per_pixel) |index| {
+                bitmap.bits_per_sample.data[index] = bps_value;
+            }
+        }
+
+        // TIFF 6.0 default: when RowsPerStrip is absent, the entire image is a
+        // single strip (spec page 39: "Default = 2**32 - 1, which is effectively
+        // infinity. That is, the entire image is one strip."). We fold that to
+        // ImageLength so downstream strip-iteration math stays in u32.
+        if (bitmap.rows_per_strip == 0 and bitmap.image_height > 0) {
+            bitmap.rows_per_strip = bitmap.image_height;
+        }
+
+        // Some non-conformant TIFF writers (and a few historical scanners) omit
+        // StripByteCounts entirely when the image is a single uncompressed
+        // strip. Synthesize it from rows_per_strip * row_byte_size so we can
+        // still decode. We only do this for compression types where the
+        // compressed and uncompressed sizes are equal (no compression).
+        if (bitmap.strip_byte_counts == null and bitmap.strip_offsets != null) {
+            switch (bitmap.compression) {
+                .uncompressed, .uncompressed_old => {
+                    const offsets_len = bitmap.strip_offsets.?.len;
+                    const synth = try allocator.alloc(u32, offsets_len);
+                    const total_rows: u32 = bitmap.image_height;
+                    const rps: u32 = if (bitmap.rows_per_strip == 0) total_rows else bitmap.rows_per_strip;
+                    var total_bits_per_pixel: u32 = 0;
+                    for (0..bitmap.samples_per_pixel) |i| {
+                        if (i < bitmap.bits_per_sample.data.len) {
+                            total_bits_per_pixel += bitmap.bits_per_sample.data[i];
+                        }
+                    }
+                    const bytes_per_row: u32 = if (total_bits_per_pixel == 1)
+                        bitmap.image_width >> 3
+                    else if (total_bits_per_pixel >= 8)
+                        bitmap.image_width * (total_bits_per_pixel / 8)
+                    else
+                        0;
+                    var rows_remaining = total_rows;
+                    for (0..offsets_len) |i| {
+                        const this_rows = @min(rps, rows_remaining);
+                        synth[i] = this_rows * bytes_per_row;
+                        rows_remaining -|= this_rows;
+                    }
+                    bitmap.strip_byte_counts = synth;
+                },
+                else => {},
+            }
+        }
     }
 
     pub fn uncompressDeflate(_: *TIFF, read_stream: *io.ReadStream, dest_buffer: []u8) !void {
@@ -188,6 +246,17 @@ pub const TIFF = struct {
         var ccitt_decoder = try ccitt.Decoder.init(image_width, num_rows, @truncate(self.bitmap.photometric_interpretation));
 
         ccitt_decoder.decode(read_stream.reader(), &writer) catch {
+            return Image.ReadError.InvalidData;
+        };
+    }
+
+    /// CCITT T.6 (Group 4 / MMR) strip decoder. T.6 has no EOL/RTC markers and
+    /// each row is decoded relative to the previous reference line; the first
+    /// reference line is implicit all-white.
+    pub fn uncompressCCITT_T6(self: *TIFF, read_stream: *io.ReadStream, dest_buffer: []u8, image_width: usize, num_rows: usize) !void {
+        var writer = std.Io.Writer.fixed(dest_buffer);
+        var t6_decoder = ccitt_t6.Decoder.init(image_width, num_rows, @truncate(self.bitmap.photometric_interpretation));
+        t6_decoder.decode(read_stream.reader(), &writer) catch {
             return Image.ReadError.InvalidData;
         };
     }
@@ -247,9 +316,10 @@ pub const TIFF = struct {
             _ = try read_stream.seekTo(offset);
 
             switch (compression) {
-                .uncompressed => _ = try reader.readSliceShort(strip_buffer[0..]),
+                .uncompressed, .uncompressed_old => _ = try reader.readSliceShort(strip_buffer[0..]),
                 .packbits => _ = try packbits.decode(read_stream, strip_buffer, compressed_byte_count),
                 .ccitt_rle => _ = try self.uncompressCCITT(read_stream, strip_buffer, image_width, current_row_size),
+                .gp_4_fax => try self.uncompressCCITT_T6(read_stream, strip_buffer, image_width, current_row_size),
                 .lzw => try self.uncompressLZW(allocator, read_stream, strip_buffer, compressed_byte_count),
                 .deflate, .pixar_deflate => _ = try self.uncompressDeflate(read_stream, strip_buffer),
                 else => return Image.Error.Unsupported,

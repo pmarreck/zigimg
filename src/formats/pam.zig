@@ -70,7 +70,7 @@ const Header = struct {
         var maybe_depth: ?usize = null;
         var maybe_maxval: ?u16 = null;
         var maybe_tuple_type: ?TupleType = null;
-        var comments: std.ArrayListUnmanaged([]const u8) = .empty;
+        var comments: std.ArrayList([]const u8) = .empty;
         defer {
             for (comments.items) |comment| allocator.free(comment);
             comments.deinit(allocator);
@@ -227,6 +227,8 @@ const Header = struct {
             .rgb565,
             .sega_grb333,
             .sega_bgr333,
+            .sega_bgr222,
+            .sega_bgr444,
             => return error.Unsupported, // unsupported pixel format
 
             .grayscale1 => {
@@ -382,7 +384,7 @@ pub const PAM = struct {
 
         if (src_maxval == dst_maxval) return val;
 
-        const W = std.meta.Int(.unsigned, @bitSizeOf(T) * 2);
+        const W = @Int(.unsigned, @bitSizeOf(T) * 2);
         return @intCast(@min(std.math.maxInt(T), @as(W, dst_maxval) * @as(W, val) / @as(W, src_maxval)));
     }
 

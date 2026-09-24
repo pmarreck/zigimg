@@ -5,15 +5,13 @@ const io = @import("../io.zig");
 pub fn Decoder(comptime endian: std.builtin.Endian) type {
     return struct {
         area_allocator: std.heap.ArenaAllocator,
-        gpa: std.mem.Allocator,
         code_size: u8 = 0,
         clear_code: u13 = 0,
         initial_code_size: u8 = 0,
         end_information_code: u13 = 0,
         next_code: u13 = 0,
         previous_code: ?u13 = null,
-        // 0.16: managed AutoArrayHashMap is gone; use Unmanaged + carry gpa explicitly.
-        dictionary: std.AutoArrayHashMapUnmanaged(u13, []const u8),
+        dictionary: std.array_hash_map.Auto(u13, []const u8),
 
         remaining_data: ?u13 = null,
         remaining_bits: u4 = 0,
@@ -22,13 +20,13 @@ pub fn Decoder(comptime endian: std.builtin.Endian) type {
         early_change: u8 = 0,
 
         const MaxCodeSize = 12;
+        const MaxDictionarySize = @as(u14, 1) << MaxCodeSize;
 
         const Self = @This();
 
         pub fn init(allocator: std.mem.Allocator, initial_code_size: u8, early_change: u8) !Self {
-            var result = Self{
+            var result: Self = .{
                 .area_allocator = std.heap.ArenaAllocator.init(allocator),
-                .gpa = allocator,
                 .code_size = initial_code_size,
                 .dictionary = .empty,
                 .initial_code_size = initial_code_size,
@@ -46,7 +44,6 @@ pub fn Decoder(comptime endian: std.builtin.Endian) type {
 
         pub fn deinit(self: *Self) void {
             self.area_allocator.deinit();
-            self.dictionary.deinit(self.gpa);
         }
 
         pub fn decode(self: *Self, reader: *std.Io.Reader, writer: *std.Io.Writer) !void {
@@ -77,25 +74,27 @@ pub fn Decoder(comptime endian: std.builtin.Endian) type {
                 read_code = try bit_reader.readBits(u13, bits_to_read, &read_size);
             }
 
-            var allocator = self.area_allocator.allocator();
+            const allocator = self.area_allocator.allocator();
 
             while (read_size > 0) {
                 if (self.dictionary.get(read_code)) |value| {
                     _ = try writer.write(value);
 
-                    if (self.previous_code) |previous_code| {
-                        if (self.dictionary.get(previous_code)) |previous_value| {
-                            var new_value = try allocator.alloc(u8, previous_value.len + 1);
-                            std.mem.copyForwards(u8, new_value, previous_value);
-                            new_value[previous_value.len] = value[0];
-                            try self.dictionary.put(self.gpa, self.next_code, new_value);
+                    if (self.next_code < MaxDictionarySize) {
+                        if (self.previous_code) |previous_code| {
+                            if (self.dictionary.get(previous_code)) |previous_value| {
+                                var new_value = try allocator.alloc(u8, previous_value.len + 1);
+                                @memcpy(new_value[0..previous_value.len], previous_value);
+                                new_value[previous_value.len] = value[0];
+                                try self.dictionary.put(allocator, self.next_code, new_value);
 
-                            self.next_code += 1;
+                                self.next_code += 1;
 
-                            const max_code = @as(u13, 1) << @intCast(self.code_size + 1);
-                            if (self.next_code == (max_code - self.early_change) and (self.code_size + 1) < MaxCodeSize) {
-                                self.code_size += 1;
-                                bits_to_read += 1;
+                                const max_code = @as(u13, 1) << @intCast(self.code_size + 1);
+                                if (self.next_code == (max_code - self.early_change) and (self.code_size + 1) < MaxCodeSize) {
+                                    self.code_size += 1;
+                                    bits_to_read += 1;
+                                }
                             }
                         }
                     }
@@ -108,11 +107,14 @@ pub fn Decoder(comptime endian: std.builtin.Endian) type {
                         return;
                     } else {
                         if (self.previous_code) |previous_code| {
+                            if (self.next_code >= MaxDictionarySize) {
+                                return error.InvalidData;
+                            }
                             if (self.dictionary.get(previous_code)) |previous_value| {
                                 var new_value = try allocator.alloc(u8, previous_value.len + 1);
-                                std.mem.copyForwards(u8, new_value, previous_value);
+                                @memcpy(new_value[0..previous_value.len], previous_value);
                                 new_value[previous_value.len] = previous_value[0];
-                                try self.dictionary.put(self.gpa, self.next_code, new_value);
+                                try self.dictionary.put(allocator, self.next_code, new_value);
 
                                 _ = try writer.write(new_value);
 
@@ -140,14 +142,14 @@ pub fn Decoder(comptime endian: std.builtin.Endian) type {
         }
 
         fn resetDictionary(self: *Self) !void {
-            self.dictionary.clearRetainingCapacity();
+            self.dictionary.clearAndFree(self.area_allocator.allocator());
             self.area_allocator.deinit();
 
             self.code_size = self.initial_code_size;
             self.next_code = (@as(u13, 1) << @intCast(self.initial_code_size)) + 2;
 
             self.area_allocator = std.heap.ArenaAllocator.init(self.area_allocator.child_allocator);
-            var allocator = self.area_allocator.allocator();
+            const allocator = self.area_allocator.allocator();
 
             const roots_size = @as(usize, 1) << @intCast(self.code_size);
 
@@ -157,7 +159,7 @@ pub fn Decoder(comptime endian: std.builtin.Endian) type {
                 var data = try allocator.alloc(u8, 1);
                 data[0] = @as(u8, @truncate(index));
 
-                try self.dictionary.put(self.gpa, index, data);
+                try self.dictionary.put(allocator, index, data);
             }
         }
     };
@@ -409,6 +411,65 @@ test "Should decode a simple LZW little-endian stream" {
 
     try std.testing.expectEqual(@as(usize, 1), out_writer.end);
     try std.testing.expectEqual(@as(u8, 1), out_data_storage[0]);
+}
+
+test "Decoding a stream that never emits a clear code does not overflow next_code" {
+    const initial_code_size = 2;
+
+    // Pack codes LSB-first while mirroring the decoder's code-width growth so the
+    // crafted stream stays in sync with it. A clear code followed by a long run of a
+    // single root code keeps adding dictionary entries without ever resetting, which is
+    // what some real-world GIF encoders produce. The first code after a clear does not
+    // add a dictionary entry, matching the decoder.
+    var packed_bits = std.array_list.Managed(u8).init(std.testing.allocator);
+    defer packed_bits.deinit();
+
+    var bit_buffer: u32 = 0;
+    var bit_count: u6 = 0;
+    var code_size: u8 = initial_code_size;
+    var next_code: u32 = (@as(u32, 1) << @intCast(initial_code_size)) + 2;
+
+    const writeCode = struct {
+        fn call(list: *std.array_list.Managed(u8), buf: *u32, count: *u6, value: u13, width: u8) !void {
+            buf.* |= @as(u32, value) << @intCast(count.*);
+            count.* += @intCast(width);
+            while (count.* >= 8) {
+                try list.append(@truncate(buf.*));
+                buf.* >>= 8;
+                count.* -= 8;
+            }
+        }
+    }.call;
+
+    const clear_code: u13 = @as(u13, 1) << @intCast(initial_code_size);
+    try writeCode(&packed_bits, &bit_buffer, &bit_count, clear_code, code_size + 1);
+
+    // Emit enough copies of root code 0 to push next_code past the u13 maximum (8191).
+    var emitted: usize = 0;
+    while (emitted < 9000) : (emitted += 1) {
+        try writeCode(&packed_bits, &bit_buffer, &bit_count, 0, code_size + 1);
+        if (emitted > 0) {
+            next_code += 1;
+            const max_code = @as(u32, 1) << @intCast(code_size + 1);
+            if (next_code == max_code and (code_size + 1) < 12) {
+                code_size += 1;
+            }
+        }
+    }
+    if (bit_count > 0) {
+        try packed_bits.append(@truncate(bit_buffer));
+    }
+
+    var read_stream = io.ReadStream.initMemory(packed_bits.items);
+
+    var out_data_storage: [16384]u8 = undefined;
+    var out_write_stream = io.WriteStream.initMemory(out_data_storage[0..]);
+
+    var lzw = try Decoder(.little).init(std.testing.allocator, initial_code_size, 0);
+    defer lzw.deinit();
+
+    // Must not panic on integer overflow; a malformed stream may fail, but cleanly.
+    lzw.decode(read_stream.reader(), out_write_stream.writer()) catch {};
 }
 
 // ============================================================================

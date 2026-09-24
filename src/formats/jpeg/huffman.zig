@@ -7,8 +7,7 @@ const Image = @import("../../Image.zig");
 const io = @import("../../io.zig");
 
 const HuffmanCode = struct { length_minus_one: u4, code: u16 };
-// 0.16: managed AutoArrayHashMap is gone; use Unmanaged and pass the allocator on calls.
-const HuffmanCodeMap = std.AutoArrayHashMapUnmanaged(HuffmanCode, u8);
+const HuffmanCodeMap = std.array_hash_map.Auto(HuffmanCode, u8);
 
 const JPEG_DEBUG = false;
 const JPEG_VERY_DEBUG = false;

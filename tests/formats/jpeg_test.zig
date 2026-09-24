@@ -5,12 +5,14 @@ const zigimg = @import("zigimg");
 const Image = zigimg.Image;
 const color = zigimg.color;
 
+const test_io = std.testing.io;
+
 test "Should error on non JPEG images" {
-    const file = try helpers.testOpenFile(helpers.fixtures_path ++ "bmp/simple_v4.bmp");
-    defer file.close(std.testing.io);
+    const file = try helpers.testOpenFile(test_io, helpers.fixtures_path ++ "bmp/simple_v4.bmp");
+    defer file.close(test_io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(test_io, file, read_buffer[0..]);
 
     var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
     defer jpeg_file.deinit();
@@ -27,11 +29,11 @@ test "Should error on non JPEG images" {
 }
 
 test "Read JFIF header properly and decode simple Huffman stream" {
-    const file = try helpers.testOpenFile(helpers.fixtures_path ++ "jpeg/huff_simple0.jpg");
-    defer file.close(std.testing.io);
+    const file = try helpers.testOpenFile(test_io, helpers.fixtures_path ++ "jpeg/huff_simple0.jpg");
+    defer file.close(test_io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(test_io, file, read_buffer[0..]);
 
     var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
     defer jpeg_file.deinit();
@@ -58,11 +60,11 @@ test "Read JFIF header properly and decode simple Huffman stream" {
 }
 
 test "Read the tuba properly" {
-    const file = try helpers.testOpenFile(helpers.fixtures_path ++ "jpeg/tuba.jpg");
-    defer file.close(std.testing.io);
+    const file = try helpers.testOpenFile(test_io, helpers.fixtures_path ++ "jpeg/tuba.jpg");
+    defer file.close(test_io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(test_io, file, read_buffer[0..]);
 
     var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
     defer jpeg_file.deinit();
@@ -94,11 +96,11 @@ test "Read the tuba properly" {
 }
 
 test "Read grayscale images" {
-    const file = try helpers.testOpenFile(helpers.fixtures_path ++ "jpeg/grayscale_sample0.jpg");
-    defer file.close(std.testing.io);
+    const file = try helpers.testOpenFile(test_io, helpers.fixtures_path ++ "jpeg/grayscale_sample0.jpg");
+    defer file.close(test_io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(test_io, file, read_buffer[0..]);
 
     var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
     defer jpeg_file.deinit();
@@ -130,19 +132,19 @@ test "Read grayscale images" {
 }
 
 test "Read subsampling images" {
-    var testdir = std.Io.Dir.cwd().openDir(std.testing.io, helpers.fixtures_path ++ "jpeg/", .{ .access_sub_paths = false, .iterate = true }) catch null;
+    var testdir = std.Io.Dir.cwd().openDir(test_io, helpers.fixtures_path ++ "jpeg/", .{ .access_sub_paths = false, .follow_symlinks = false, .iterate = true }) catch null;
     if (testdir) |*idir| {
-        defer idir.close(std.testing.io);
+        defer idir.close(test_io);
 
         var it = idir.iterate();
-        while (try it.next(std.testing.io)) |entry| {
+        while (try it.next(test_io)) |entry| {
             if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".jpg") or !std.mem.startsWith(u8, entry.name, "subsampling_")) continue;
 
-            var test_file = try idir.openFile(std.testing.io, entry.name, .{ .mode = .read_only });
-            defer test_file.close(std.testing.io);
+            var test_file = try idir.openFile(test_io, entry.name, .{ .mode = .read_only });
+            defer test_file.close(test_io);
 
             var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-            var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, test_file, read_buffer[0..]);
+            var read_stream = zigimg.io.ReadStream.initFile(test_io, test_file, read_buffer[0..]);
 
             var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
             defer jpeg_file.deinit();
@@ -180,12 +182,73 @@ test "Read subsampling images" {
     }
 }
 
-test "Read progressive jpeg with restart intervals" {
-    const file = try helpers.testOpenFile(helpers.fixtures_path ++ "jpeg/tuba_restart_prog.jpg");
-    defer file.close(std.testing.io);
+test "Read 4:2:0 JPEG with restart interval" {
+    const file = try helpers.testOpenFile(test_io, helpers.fixtures_path ++ "jpeg/restart_420.jpg");
+    defer file.close(test_io);
 
     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
+    var read_stream = zigimg.io.ReadStream.initFile(test_io, file, read_buffer[0..]);
+
+    var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
+    defer jpeg_file.deinit();
+
+    var pixels_opt: ?zigimg.color.PixelStorage = null;
+    const frame = try jpeg_file.read(&read_stream, &pixels_opt);
+
+    defer {
+        if (pixels_opt) |pixels| {
+            pixels.deinit(helpers.zigimg_test_allocator);
+        }
+    }
+
+    try helpers.expectEq(frame.frame_header.width, 32);
+    try helpers.expectEq(frame.frame_header.height, 32);
+
+    try std.testing.expect(pixels_opt != null);
+    if (pixels_opt) |pixels| {
+        try std.testing.expect(pixels == .rgb24);
+        try helpers.expectEq(pixels.rgb24[4 * 32 + 4], zigimg.color.Rgb24.from.rgb(254, 0, 0));
+        try helpers.expectEq(pixels.rgb24[4 * 32 + 20], zigimg.color.Rgb24.from.rgb(0, 255, 1));
+        try helpers.expectEq(pixels.rgb24[20 * 32 + 4], zigimg.color.Rgb24.from.rgb(0, 0, 254));
+        try helpers.expectEq(pixels.rgb24[20 * 32 + 20], zigimg.color.Rgb24.from.rgb(255, 255, 255));
+    }
+}
+
+test "Read progressive 4:2:0 JPEG with component ids 0, 1, and 2" {
+    const file = try helpers.testOpenFile(test_io, helpers.fixtures_path ++ "jpeg/progressive_420_id0.jpg");
+    defer file.close(test_io);
+
+    var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+    var read_stream = zigimg.io.ReadStream.initFile(test_io, file, read_buffer[0..]);
+
+    var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
+    defer jpeg_file.deinit();
+
+    var pixels_opt: ?zigimg.color.PixelStorage = null;
+    const frame = try jpeg_file.read(&read_stream, &pixels_opt);
+
+    defer {
+        if (pixels_opt) |pixels| {
+            pixels.deinit(helpers.zigimg_test_allocator);
+        }
+    }
+
+    try helpers.expectEq(frame.frame_header.width, 32);
+    try helpers.expectEq(frame.frame_header.height, 24);
+    try std.testing.expect(pixels_opt != null);
+    if (pixels_opt) |pixels| {
+        try std.testing.expect(pixels == .rgb24);
+        try helpers.expectEq(pixels.rgb24[4 * 32 + 4], zigimg.color.Rgb24.from.rgb(210, 32, 42));
+        try helpers.expectEq(pixels.rgb24[18 * 32 + 24], zigimg.color.Rgb24.from.rgb(240, 240, 240));
+    }
+}
+
+test "Read progressive jpeg with restart intervals" {
+    const file = try helpers.testOpenFile(test_io, helpers.fixtures_path ++ "jpeg/tuba_restart_prog.jpg");
+    defer file.close(test_io);
+
+    var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+    var read_stream = zigimg.io.ReadStream.initFile(test_io, file, read_buffer[0..]);
 
     var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
     defer jpeg_file.deinit();
@@ -226,9 +289,9 @@ fn averageDelta(img0: Image, img1: Image) !f32 {
             for (0..height) |y| {
                 for (0..width) |x| {
                     const idx = y * width + x;
-                    sum += @abs(@as(f64, @floatFromInt(pix0[idx].r)) - @as(f64, @floatFromInt(pix1[idx].r)));
-                    sum += @abs(@as(f64, @floatFromInt(pix0[idx].g)) - @as(f64, @floatFromInt(pix1[idx].g)));
-                    sum += @abs(@as(f64, @floatFromInt(pix0[idx].b)) - @as(f64, @floatFromInt(pix1[idx].b)));
+                    sum += @abs(@as(f64, pix0[idx].r) - @as(f64, pix1[idx].r));
+                    sum += @abs(@as(f64, pix0[idx].g) - @as(f64, pix1[idx].g));
+                    sum += @abs(@as(f64, pix0[idx].b) - @as(f64, pix1[idx].b));
                     total_pixel_diff += 3;
                 }
             }
@@ -240,7 +303,7 @@ fn averageDelta(img0: Image, img1: Image) !f32 {
             for (0..height) |y| {
                 for (0..width) |x| {
                     const idx = y * width + x;
-                    sum += @abs(@as(f64, @floatFromInt(pix0[idx].value)) - @as(f64, @floatFromInt(pix1[idx].value)));
+                    sum += @abs(@as(f64, pix0[idx].value) - @as(f64, pix1[idx].value));
                     total_pixel_diff += 1;
                 }
             }
@@ -307,7 +370,7 @@ test "JPEG writer quality tests" {
     var read_buffer: [4096]u8 = undefined;
     for (testCases) |tc| {
         // Read the original image
-        var original = helpers.testImageFromFile(tc.filename, &read_buffer) catch continue;
+        var original = helpers.testImageFromFile(test_io, tc.filename, &read_buffer) catch continue;
         defer original.deinit(helpers.zigimg_test_allocator);
 
         // Encode and decode
@@ -386,6 +449,7 @@ fn encodeToMemory(img: *const Image, quality: u8) ![]u8 {
 }
 
 test "JPEG writer round-trip with all test fixtures" {
+
     // Test all available JPEG fixtures with round-trip encoding/decoding
     const test_fixtures = [_][]const u8{
         "test-suite/fixtures/jpeg/huff_simple0.jpg",
@@ -402,11 +466,11 @@ test "JPEG writer round-trip with all test fixtures" {
 
     for (test_fixtures) |fixture_path| {
         // Skip if file doesn't exist
-        const file = helpers.testOpenFile(fixture_path) catch continue;
-        defer file.close(std.testing.io);
+        const file = helpers.testOpenFile(test_io, fixture_path) catch continue;
+        defer file.close(test_io);
 
         var read_buffer: [4096]u8 = undefined;
-        var read_stream = zigimg.io.ReadStream.initFile(std.testing.io, file, read_buffer[0..]);
+        var read_stream = zigimg.io.ReadStream.initFile(test_io, file, read_buffer[0..]);
         var jpeg_file = jpeg.JPEG.init(helpers.zigimg_test_allocator);
         defer jpeg_file.deinit();
 
@@ -490,7 +554,7 @@ test "JPEG writer simple fuzzing" {
 test "JPEG writer video-001.png corruption test" {
     // Test the problematic video-001.png file that shows corruption
     var read_buffer: [4096]u8 = undefined;
-    var original_image = try helpers.testImageFromFile("png/basi2c08.png", &read_buffer);
+    var original_image = try helpers.testImageFromFile(test_io, helpers.fixtures_path ++ "png/basi2c08.png", &read_buffer);
     defer original_image.deinit(helpers.zigimg_test_allocator);
 
     // Test with different quality settings to isolate the issue

@@ -58,7 +58,7 @@ pub const ReadStream = union(enum) {
             .memory => |*memory| {
                 const new_pos: i64 = @as(i64, @intCast(memory.seek)) + offset;
                 if (new_pos < 0 or new_pos >= memory.end) {
-                    return SeekError.Unseekable;
+                    return std.Io.File.SeekError.Unseekable;
                 }
 
                 memory.seek = @intCast(new_pos);
@@ -99,7 +99,7 @@ pub const WriteStream = union(enum) {
     file: std.Io.File.Writer,
 
     pub const Error = SeekError || std.Io.Writer.Error;
-    pub const SeekError = std.Io.File.Writer.SeekError;
+    pub const SeekError = std.Io.File.SeekError;
 
     pub fn initMemory(buffer: []u8) WriteStream {
         return .{
@@ -120,7 +120,7 @@ pub const WriteStream = union(enum) {
         };
     }
 
-    pub fn seekTo(self: *WriteStream, offset: u64) SeekError!void {
+    pub fn seekTo(self: *WriteStream, offset: u64) Error!void {
         switch (self.*) {
             .memory => |*memory| {
                 if (offset >= memory.buffer.len) {
@@ -134,9 +134,7 @@ pub const WriteStream = union(enum) {
                     return SeekError.Unexpected;
                 };
                 file_writer.interface.end = 0;
-                // 0.16: seekTo can return Io.Writer.Error (incl. WriteFailed); since we just
-                // flushed manually, seekToUnbuffered keeps the error set narrow.
-                try file_writer.seekToUnbuffered(offset);
+                try file_writer.seekTo(offset);
             },
         }
     }
@@ -195,7 +193,7 @@ pub fn BitReader(comptime endian: std.builtin.Endian) type {
         }
 
         fn initBits(comptime T: type, out: anytype, num: u16) Bits(T) {
-            const UT = std.meta.Int(.unsigned, @bitSizeOf(T));
+            const UT = @Int(.unsigned, @bitSizeOf(T));
             return .{
                 @bitCast(@as(UT, @intCast(out))),
                 num,
@@ -224,7 +222,7 @@ pub fn BitReader(comptime endian: std.builtin.Endian) type {
         ///  containing them in the least significant end, and the number of bits successfully
         ///  read. Reaching the end of the stream is not an error.
         pub fn readBitsTuple(self: *@This(), comptime T: type, num: u16) !Bits(T) {
-            const UT = std.meta.Int(.unsigned, @bitSizeOf(T));
+            const UT = @Int(.unsigned, @bitSizeOf(T));
             const U = if (@bitSizeOf(T) < 8) u8 else UT; //it is a pain to work with <u8
 
             //dump any bits in our buffer first
@@ -414,7 +412,7 @@ pub fn BitWriter(comptime endian: std.builtin.Endian) type {
         ///  are enough to fill a byte.
         pub fn writeBits(self: *@This(), value: anytype, num: u16) !void {
             const T = @TypeOf(value);
-            const UT = std.meta.Int(.unsigned, @bitSizeOf(T));
+            const UT = @Int(.unsigned, @bitSizeOf(T));
             const U = if (@bitSizeOf(T) < 8) u8 else UT; //<u8 is a pain to work with
 
             var in: U = @as(UT, @bitCast(value));
@@ -497,8 +495,8 @@ pub fn BitWriter(comptime endian: std.builtin.Endian) type {
 }
 
 test "BitWriter: api coverage" {
-    var mem_be = [_]u8{0} ** 2;
-    var mem_le = [_]u8{0} ** 2;
+    var mem_be: [2]u8 = @splat(0);
+    var mem_le: [2]u8 = @splat(0);
 
     var mem_out_be = std.Io.Writer.fixed(mem_be[0..]);
     var bit_stream_be: BitWriter(.big) = .{

@@ -42,6 +42,9 @@ jobs:
       - name: Build
         run: nix build .#packages.${{ matrix.system }}.default
 
+      - name: Test with pinned fixtures
+        run: nix build .#checks.${{ matrix.system }}.test --no-link -L
+
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:

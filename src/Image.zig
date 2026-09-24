@@ -9,7 +9,7 @@ const utils = @import("utils.zig");
 
 width: usize = 0,
 height: usize = 0,
-pixels: color.PixelStorage = .{ .invalid = void{} },
+pixels: color.PixelStorage = .{ .invalid = {} },
 animation: Animation = .{},
 
 const Image = @This();
@@ -120,20 +120,27 @@ pub const Animation = struct {
 
 const FormatInteraceFnType = *const fn () FormatInterface;
 
-// Build a per-Format-tag table of formatInterface fn pointers, indexed by
-// `@intFromEnum(Format)`. We iterate the Format enum directly (rather than the
-// older approach of iterating `std.meta.declarations` and filtering for the
-// presence of a `formatInterface` decl) so the array indices line up 1:1 with
-// the enum tag values regardless of decl-iteration quirks.
 const all_interface_funcs = blk: {
-    const fields = @typeInfo(Format).@"enum".fields;
-    var result: [fields.len]FormatInteraceFnType = undefined;
-    for (fields, 0..) |field, i| {
-        const decl_value = @field(SupportedFormats, field.name);
-        result[i] = @field(decl_value, "formatInterface");
+    const all_formats_delcs = std.meta.declarations(SupportedFormats);
+    var result: []const FormatInteraceFnType = &[0]FormatInteraceFnType{};
+    for (all_formats_delcs) |decl| {
+        const decl_value = @field(SupportedFormats, decl.name);
+        const entry_type = @TypeOf(decl_value);
+        if (entry_type == type) {
+            const entry_type_info = @typeInfo(decl_value);
+            if (entry_type_info == .@"struct") {
+                for (entry_type_info.@"struct".decls) |struct_entry| {
+                    if (std.mem.eql(u8, struct_entry.name, "formatInterface")) {
+                        result = result ++ [_]FormatInteraceFnType{
+                            @field(decl_value, struct_entry.name),
+                        };
+                        break;
+                    }
+                }
+            }
+        }
     }
-    const final = result;
-    break :blk final[0..];
+    break :blk result[0..];
 };
 
 /// Deinit the image
@@ -143,16 +150,16 @@ pub fn deinit(self: *Image, allocator: std.mem.Allocator) void {
 }
 
 /// Detect which image format is used by the file path
-pub fn detectFormatFromFilePath(stdio: std.Io, file_path: []const u8, read_buffer: []u8) !Format {
-    var file = try std.Io.Dir.cwd().openFile(stdio, file_path, .{});
-    defer file.close(stdio);
+pub fn detectFormatFromFilePath(io_instance: std.Io, file_path: []const u8, read_buffer: []u8) !Format {
+    var file = try std.Io.Dir.cwd().openFile(io_instance, file_path, .{});
+    defer file.close(io_instance);
 
-    return detectFormatFromFile(stdio, file, read_buffer);
+    return detectFormatFromFile(io_instance, file, read_buffer);
 }
 
 /// Detect which image format is used by the file
-pub fn detectFormatFromFile(stdio: std.Io, file: std.Io.File, read_buffer: []u8) !Format {
-    var read_stream = io.ReadStream.initFile(stdio, file, read_buffer);
+pub fn detectFormatFromFile(io_instance: std.Io, file: std.Io.File, read_buffer: []u8) !Format {
+    var read_stream = io.ReadStream.initFile(io_instance, file, read_buffer);
     return internalDetectFormat(&read_stream);
 }
 
@@ -163,16 +170,16 @@ pub fn detectFormatFromMemory(buffer: []const u8) !Format {
 }
 
 /// Load an image from a file path
-pub fn fromFilePath(allocator: std.mem.Allocator, stdio: std.Io, file_path: []const u8, read_buffer: []u8) !Image {
-    var file = try std.Io.Dir.cwd().openFile(stdio, file_path, .{});
-    defer file.close(stdio);
+pub fn fromFilePath(allocator: std.mem.Allocator, io_instance: std.Io, file_path: []const u8, read_buffer: []u8) !Image {
+    var file = try std.Io.Dir.cwd().openFile(io_instance, file_path, .{});
+    defer file.close(io_instance);
 
-    return fromFile(allocator, stdio, file, read_buffer);
+    return fromFile(allocator, io_instance, file, read_buffer);
 }
 
-/// Load an image from a standard library std.Io.File
-pub fn fromFile(allocator: std.mem.Allocator, stdio: std.Io, file: std.Io.File, read_buffer: []u8) !Image {
-    var read_stream = io.ReadStream.initFile(stdio, file, read_buffer);
+/// Load an image from a standard library std.fs.File
+pub fn fromFile(allocator: std.mem.Allocator, io_instance: std.Io, file: std.Io.File, read_buffer: []u8) !Image {
+    var read_stream = io.ReadStream.initFile(io_instance, file, read_buffer);
     return internalRead(allocator, &read_stream);
 }
 
@@ -216,6 +223,34 @@ pub fn create(allocator: std.mem.Allocator, width: usize, height: usize, pixel_f
     return result;
 }
 
+/// Return a duplicate copy of the current image
+pub fn dupe(self: Image, allocator: std.mem.Allocator) !Image {
+    var result: Image = .{
+        .width = self.width,
+        .height = self.height,
+        .pixels = try color.PixelStorage.init(allocator, std.meta.activeTag(self.pixels), self.width * self.height),
+    };
+
+    @memcpy(result.pixels.asBytes(), self.pixels.asConstBytes());
+
+    result.animation.frames = try .initCapacity(allocator, self.animation.frames.items.len);
+    result.animation.loop_count = self.animation.loop_count;
+
+    for (self.animation.frames.items, 0..) |self_frame, index| {
+        var dupe_frame = self_frame;
+        if (index == 0) {
+            dupe_frame.pixels = result.pixels;
+        } else {
+            dupe_frame.pixels = try color.PixelStorage.init(allocator, std.meta.activeTag(self_frame.pixels), result.pixels.len());
+            @memcpy(dupe_frame.pixels.asBytes(), self_frame.pixels.asConstBytes());
+        }
+
+        try result.animation.frames.append(allocator, dupe_frame);
+    }
+
+    return result;
+}
+
 /// Return the pixel format of the image
 pub fn pixelFormat(self: Image) PixelFormat {
     return std.meta.activeTag(self.pixels);
@@ -253,16 +288,16 @@ pub fn toManaged(self: Image, allocator: std.mem.Allocator) Managed {
 }
 
 /// Write the image to an image format to the specified path
-pub fn writeToFilePath(self: Image, allocator: std.mem.Allocator, stdio: std.Io, file_path: []const u8, write_buffer: []u8, encoder_options: EncoderOptions) WriteError!void {
-    var file = try std.Io.Dir.cwd().createFile(stdio, file_path, .{});
-    defer file.close(stdio);
+pub fn writeToFilePath(self: Image, allocator: std.mem.Allocator, io_instance: std.Io, file_path: []const u8, write_buffer: []u8, encoder_options: EncoderOptions) WriteError!void {
+    var file = try std.Io.Dir.cwd().createFile(io_instance, file_path, .{});
+    defer file.close(io_instance);
 
-    try self.writeToFile(allocator, stdio, file, write_buffer, encoder_options);
+    try self.writeToFile(allocator, io_instance, file, write_buffer, encoder_options);
 }
 
 /// Write the image to an image format to the specified std.Io.File
-pub fn writeToFile(self: Image, allocator: std.mem.Allocator, stdio: std.Io, file: std.Io.File, write_buffer: []u8, encoder_options: EncoderOptions) WriteError!void {
-    var write_stream = io.WriteStream.initFile(stdio, file, write_buffer);
+pub fn writeToFile(self: Image, allocator: std.mem.Allocator, io_instance: std.Io, file: std.Io.File, write_buffer: []u8, encoder_options: EncoderOptions) WriteError!void {
+    var write_stream = io.WriteStream.initFile(io_instance, file, write_buffer);
 
     try self.internalWrite(allocator, &write_stream, encoder_options);
 }
